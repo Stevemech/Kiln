@@ -148,6 +148,6 @@ echo
 say "One thing left: a model backend (not installed by Kiln)."
 echo "    • LM Studio  (recommended)  https://lmstudio.ai   — serves the model's full context, zero config"
 echo "    • Ollama                    https://ollama.com    — set OLLAMA_CONTEXT_LENGTH=16384 for agentic use"
-echo "    Then pull/download a tool-capable model (e.g. Qwen2.5-Coder 7B)."
+echo "    Then pull/download a tool-capable model (e.g. Qwen3 4B Instruct — run /models inside Kiln for picks that fit your GPU)."
 echo
 say "Next:  kiln doctor   (check setup)   ·   kiln   (start)   ·   bash install.sh --uninstall   (remove)"
