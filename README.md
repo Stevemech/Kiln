@@ -2,6 +2,8 @@
 
 A lightweight, local-first terminal AI coding agent — **Claude Code for your own GPU**.
 
+![Kiln fixing a real bug with a local model — live cockpit, diff preview, offline badge](demo/kiln-demo.gif)
+
 Kiln runs agentic coding entirely on a **local model backend** —
 [LM Studio](https://lmstudio.ai), [Ollama](https://ollama.com), or any
 OpenAI-compatible endpoint (llama.cpp, vLLM, …). It is not an IDE and not a
@@ -66,10 +68,17 @@ need Bun or the source to run it. You need two things:
 3. **At least one downloaded/pulled chat model** on that backend (a tool-capable
    model is strongly recommended, since file editing relies on tool calls).
 
+> Building Kiln **from source** (not needed to use it) additionally requires **Bun ≥ 1.3** —
+> see [Developing Kiln](#developing-kiln).
 
-On first launch Kiln runs a short **onboarding** wizard — your name, which backend to
-use, and the default model — and remembers your choices. Re-run it any time with
-`kiln onboard`, or the `/onboard` command inside the app.
+On first launch Kiln runs a short **onboarding** wizard — your name, how experienced
+you are with local models, which backend to use, and the default model — and remembers
+your choices. If you say you know your way around, you go straight to setup; otherwise
+Kiln shows a short guide first: what Kiln is, what **your** machine can run (it reads
+your GPU and names the best pick from its catalog), what to honestly expect from local
+models, and — if no backend is installed yet — the exact install steps for your OS
+(it re-checks live once you've installed one). Re-run it any time with `kiln onboard`,
+or the `/onboard` command inside the app.
 
 ## Install
 
@@ -79,15 +88,15 @@ its SHA256**, puts `kiln` on your PATH, and installs `opencode` if it's missing.
 
 ```sh
 # macOS / Linux
-KILN_REPO=Stevemech/Kiln  curl -fsSL https://raw.githubusercontent.com/Stevemech/Kiln/main/scripts/install.sh | bash
+KILN_REPO=OWNER/kiln  curl -fsSL https://raw.githubusercontent.com/OWNER/kiln/main/scripts/install.sh | bash
 bash install.sh --uninstall          # remove kiln + the PATH line it added
 ```
 ```powershell
 # Windows
-$env:KILN_REPO="Stevemech/Kiln"; irm https://raw.githubusercontent.com/Stevemech/Kiln/main/scripts/install.ps1 | iex
+$env:KILN_REPO="OWNER/kiln"; irm https://raw.githubusercontent.com/OWNER/kiln/main/scripts/install.ps1 | iex
 ```
 
-- Replace `Stevemech/Kiln` with the **public release repo** (or pass `KILN_REPO=owner/repo`). Pin a
+- Replace `OWNER/kiln` with the **public release repo** (or pass `KILN_REPO=owner/repo`). Pin a
   version with `KILN_VERSION=vX.Y.Z` (default: the latest release, prereleases included).
 - The installer is **idempotent** (safe to re-run). It can't install a model backend for you —
   see [Prerequisites](#prerequisites) (**LM Studio recommended**).
@@ -133,10 +142,14 @@ Inside the app, use `/sessions`, `/resume`, and `/new`.
 
 1. Kiln connects to your chosen backend and reads its available models. It
    **selects** a default — your saved choice from `/settings`, or the largest model
-   if you haven't picked one — and shows it in the cockpit as `standby`. **Nothing is
-   loaded yet**, so you can change the selection with `/model` before committing VRAM.
-   (On a backend that can't load models, like a generic endpoint, the model is simply
-   the one the server already serves.)
+   if you haven't picked one — and shows it in the cockpit as `standby`. Then it
+   quietly **preheats**: it loads that model in the background and warms the backend's
+   prompt cache with a throwaway turn, so your **first real prompt skips the cold
+   prefill** — the cockpit narrates `firing up the kiln…`, then `kiln is warm —
+   replies start fast`. You can still switch with `/model` first; set `KILN_PREHEAT=0`
+   to skip the warm-up and load lazily on your first prompt instead. (On a backend
+   that can't load models, like a generic endpoint, the model is simply the one the
+   server already serves.)
 2. Kiln starts the opencode agent and opens the **full-screen TUI** (it takes over the
    terminal's alternate screen, like `vim`/`less`, and restores it untouched on exit). It
    opens with a friendly greeting (`Welcome back, <you>!`), and a little **ember-fox mascot**
@@ -149,8 +162,10 @@ Inside the app, use `/sessions`, `/resume`, and `/new`.
    height, a persistent **parameter rail** down the right edge, and the **cockpit** + input
    pinned at the bottom. Since the alternate screen has no native scrollback, the transcript
    scrolls **in-app** (PageUp/PageDown, or arrows when it has focus).
-3. Type a coding request, e.g. `create a hello world http server in node`. On your
-   **first prompt** Kiln loads the selected model (the cockpit shows the load), then
+3. Type a coding request, e.g. `create a hello world http server in node`. By the time
+   you send your **first prompt** the model is usually already warm (the preheat above);
+   if it isn't — preheat off, or you just switched models — Kiln loads it now (the
+   cockpit shows the load). Then
    opencode works — assistant text streams in, then renders as clean **Markdown** once
    the turn finishes, and tool activity (file writes, shell, etc.) shows as compact rows
    that update in place: a dim verb (RUN/EDIT/READ/…), the target, a status glyph, and a
@@ -170,6 +185,7 @@ always returns you to the input. The prompt itself is a small multi-line editor:
 | `↑` / `↓` | Recall your previous / next prompt (command history) — when the **input** has focus |
 | `←` / `→` | Move the cursor |
 | `Tab` | Focus the **transcript** to scroll it (Esc returns to the input) |
+| `Shift+Tab` | Cycle the **autonomy mode** — plan → ask → act → auto (live, mid-session; see `/mode`) |
 | `PageUp` / `PageDown` | Scroll the transcript (works from any focus, even mid-turn) |
 | **Mouse wheel** | Scroll the transcript up/down (via the terminal's alternate-scroll mode, so **normal text selection still works** — no Shift needed). Also `PageUp`/`PageDown` from anywhere. |
 | `↑` / `↓` / `g` / `G` | Line-scroll / jump to top / bottom — when the **transcript** has focus |
@@ -214,10 +230,15 @@ A bordered panel pinned below the transcript shows, at a glance:
   size once opencode reports it), **`thinking…`** (reasoning, if the model reasons),
   **`working…`** (running a tool), and **`generating · 2,418 tokens · 5.2s`** (the **exact**
   live token count and elapsed time);
+- a **`MODE` badge** showing where the autonomy dial sits — `PLAN` / `ASK` / `ACT` /
+  `AUTO` — so you always know how much the agent will do without asking (`Shift+Tab`
+  cycles it; see [Slash commands](#slash-commands));
 - **throughput** as two rates (full words, on their own cockpit row): **`GENERATION`** is
-  the decode rate in `tokens/sec`, measured over the decode window only — not blurred by
-  prefill time — and **`PREFILL`** is the prompt-eval rate (prompt tokens ÷ time-to-first-
-  token), shown when the window is wide enough and the prefill is measurable. These mirror
+  the decode rate in `tokens/sec`, measured over the decode windows of the turn's text
+  steps only — not blurred by prefill or tool time — and **`PREFILL`** is the prompt-eval
+  rate (prompt tokens ÷ time-to-first-token, from the turn's first, cold prefill), shown
+  when the window is wide enough and the prefill is measurable. Both accumulate across a
+  turn's multiple steps, so the meter never dips mid-turn. These mirror
   LM Studio's and Ollama's own
   prefill/decode phases. **Identical math for both backends:** opencode drives inference
   over each backend's OpenAI-compatible endpoint, which strips Ollama's native
@@ -227,7 +248,12 @@ A bordered panel pinned below the transcript shows, at a glance:
   native progress signal isn't observable over that endpoint — and where a window can't be
   measured the rate is hidden rather than faked. Every count and timing is exact and real.);
 - a **context-budget meter** (`context 12k/16k (75%)`) that turns yellow as you approach
-  the window and warns when compaction is near.
+  the window and warns when compaction is near;
+- a **cloud-savings odometer**: on wide terminals the session total shows
+  `≈$X.XX cloud avoided` — what this session's tokens would have cost on a metered
+  cloud API, at a deliberately round blended reference price of **$6 per million
+  tokens**. It's marked `≈` for a reason: a vibe-accurate odometer, not an invoice.
+  (`--plain` prints the same figure as a goodbye line when you quit.)
 
 These numbers are read from the control channel (max context) and the live turn
 (everything else) — Kiln never guesses. The `--plain` CLI prints the same readout
@@ -236,11 +262,55 @@ These numbers are read from the control channel (max context) and the live turn
 ### Slash commands
 
 - **`/model`** — open a picker to change the **selected** model. Move with ↑/↓ (or
-  `j`/`k`), jump with number keys, `Enter` to select, `Esc` to cancel. This only changes
+  `j`/`k`), jump with number keys, `Enter` to select, `Esc` to cancel, `b` to switch
+  **backend** (see `/backend`). This only changes
   which model is selected — it loads on your **next prompt**, not immediately, so you can
   switch freely without committing VRAM. The context meter resets on the next load.
-  (Every downloaded model's capabilities are registered with opencode at startup, so a
-  model downloaded *after* Kiln launched needs a restart to be switchable.)
+  Models you've `/verify`'d show their verdict right in the picker — `✓ tools verified`
+  or `⚠ tools fail live`. A model you pull *after* Kiln launched is registered
+  automatically (a quick agent bounce that keeps your session), so it's switchable right
+  away — no restart needed.
+- **`/mode`** — the **autonomy mode dial**: how much the agent may do without asking.
+  Four positions, most careful first:
+  - **plan** — read-only. Kiln reads, greps, and proposes; every file edit and shell
+    command is auto-rejected with a notice.
+  - **ask** — confirm everything: every file edit **and** every shell command asks first.
+  - **act** — file edits run freely; shell commands still ask.
+  - **auto** — full autonomy, nothing asks. The default.
+
+  Cycle it live with `Shift+Tab` (TUI) or `/mode`, or jump straight to a mode with
+  **`/plan`**, **`/ask`**, **`/act`**, **`/auto`** (all of these work in `--plain` too).
+  The dial applies **immediately, mid-session** — no restart — and the cockpit shows a
+  `MODE` badge so you always know where it sits. When a mode asks, Kiln pops an approval
+  prompt mid-turn: `y` allow once, `a` allow for the session, `n`/`Esc` reject.
+- **`/backend`** — switch the **backend** — LM Studio / Ollama / generic endpoint —
+  **live**, without quitting. The picker shows each one's live status (`● running` /
+  `○ not detected`); pick with ↑/↓ + `Enter`, or jump with `1`–`3` / `l` / `o` / `g`.
+  Kiln stands the agent back up on the new backend and **reattaches your conversation**.
+  Also reachable with `b` from the `/model` picker and `/settings`.
+- **`/models`** — **discover models worth running on your hardware.** A curated,
+  hand-verified catalog of local models that are genuinely good at agentic work,
+  filtered to the ones that fit **your** machine (VRAM-aware), with task tags
+  (`coding` / `chat` / `vision`), honest cautions (thinking burn, version gates, …),
+  and the exact `/pull` command for each. The curation is opinionated on purpose —
+  every entry was verified to actually drive tools. qwen2.5-coder, for example, is
+  deliberately absent: it advertises tool support but emits its calls as plain text
+  through Ollama, which silently breaks agentic use.
+- **`/verify`** `[model]` — **prove a model can really call tools** before trusting it
+  with your files. Backend capability flags can lie (see qwen2.5-coder above), so this
+  sends one real request with a tools array to your backend and checks whether a
+  **structured** tool call comes back — burning a few hundred local tokens to validate
+  a model is exactly the kind of thing a metered cloud tool would never do. The verdict
+  persists and shows in the model pickers as `✓ tools verified` / `⚠ tools fail live`.
+  (The backend will JIT-load the model if it isn't resident — the honest cost of a real
+  answer.)
+- **`/duel`** `[opponent] <prompt>` — **one prompt, two local models, honest numbers.**
+  Runs your prompt through the active model **and** an opponent (name one, or let Kiln
+  pick), back to back in throwaway sessions, then shows the answers side by side with
+  first-token time, tok/s, token counts, and a speed verdict. On a metered API nobody
+  double-spends every prompt for sport; on your own GPU the second opinion is free —
+  great for picking a daily-driver model in minutes. Tools are auto-rejected during a
+  duel (it's an answer bake-off, not a race to edit your files).
 - **`/params`** — focus the **parameter rail** to edit temperature / top-p / context for the
   active model inline (`↑`/`↓` field, `←`/`→` change, `a` apply, `Esc` leave). See
   [The parameter rail](#the-parameter-rail).
@@ -269,11 +339,11 @@ These numbers are read from the control channel (max context) and the live turn
     tradeoff note. Set them globally or **per-model** (press `m` to switch scope). `Default`
     leaves sampling to the backend (Kiln's out-of-the-box behavior). Changes persist and
     take effect on the next launch (or `/onboard`) — opencode resolves these at agent start.
-  - **Approvals** (press `a`) — control whether the agent may **edit files** and **run shell
-    commands**: per-tool `allow` / `ask` / `deny`, with profiles **Auto** (no prompts,
-    default), **Ask** (confirm each action), and **Read-only** (deny edits/commands). In
-    **Ask** mode Kiln pops an approval prompt mid-turn — `y` allow once, `a` allow for the
-    session, `n`/`Esc` reject. Applies on the next launch (or `/onboard`).
+  - **Mode** (press `a`) — cycle the **autonomy mode dial** (plan / ask / act / auto;
+    see `/mode` above). Like everywhere else on the dial, it applies **immediately** —
+    this session included, no restart.
+  - **Backend** (press `b`) — switch LM Studio / Ollama / generic endpoint live (see
+    `/backend` above).
   - **Web access** (press `w`) — Kiln is **offline by default**. This toggle is the only
     thing that lets the agent reach the internet; it's clearly labeled and starts **off**, and
     it governs **both** of opencode's web tools: **`webfetch`** (retrieve a URL — needs no
@@ -297,11 +367,14 @@ These numbers are read from the control channel (max context) and the live turn
   next launch. In `--plain`, use `/mcp`, `/mcp add <name> [local <cmd…> | remote <url>]`, and
   `/mcp enable|disable|remove <name>`. Reuses opencode's native `mcp` config — Kiln doesn't
   reinvent the connection.
-- **`/pull`** `[model]` — **download a model from inside Kiln** (Ollama). With no argument it
+- **`/pull`** `[model]` — **download a model from inside Kiln** (Ollama *and* LM Studio).
+  With no argument it
   lists a few solid local-coding models that **fit your GPU** (VRAM-aware, with a `fits`/`tight`
-  badge); with a tag (`/pull qwen2.5-coder:7b`) it downloads it with a progress bar. After a
-  pull, `/reconnect` registers it and `/model` selects it. (LM Studio downloads happen in the
-  LM Studio app; a generic endpoint can't pull.) Recently-used models are marked `· recent` in
+  badge); with a name it downloads it with live byte progress — an Ollama tag
+  (`/pull qwen3:4b-instruct-2507-q4_K_M`) or an LM Studio catalog name (Kiln finds it in
+  the LM Studio catalog and picks LM Studio's own recommended quant). After a pull the
+  model is registered automatically — pick it with `/model` to start using it. (A generic
+  endpoint can't pull.) Recently-used models are marked `· recent` in
   the `/model` picker.
 - **`/image`** `<path>` — **stage an image for your next prompt** (for vision-capable models).
   Reads a local image and attaches it to the next message. ⚠️ **Heads-up:** on the current
@@ -320,8 +393,10 @@ These numbers are read from the control channel (max context) and the live turn
   down the opencode server and the control channel, and Ink restores your terminal — no
   orphaned `opencode serve` and no model left occupying VRAM.
 
-> **Single model, loaded lazily.** By default Kiln runs everything on the one model you
-> pick. It loads that model only when you send your first prompt, keeps just that one model
+> **Single model, kept warm.** By default Kiln runs everything on the one model you
+> pick. At launch it preheats that model in the background (with `KILN_PREHEAT=0`, or if
+> you act before the warm-up finishes, it loads lazily on your first prompt instead),
+> keeps just that one model
 > resident (any *Kiln-loaded* extras are unloaded so a single model stays in VRAM), and
 > unloads what it loaded when you quit. Models **you** had loaded are left untouched.
 > **Routing** (the hierarchy toggle) is opt-in and never reloads: it only picks between models
@@ -338,11 +413,15 @@ Launch with `kiln plain` (or `kiln start --plain`, alias `--no-tui`):
 kiln plain
 ```
 
-Plain mode keeps the readline prompt and the same commands — `/model`, `/sessions`,
-`/resume`, `/new`, `/rename`, `/params`, `/approve`, `/web`, `/airgap`, `/hierarchy`, `/mcp`, `/perf`, `/export`, `/pull`, `/image`, `/reconnect`, `/tour`, `/exit` — printing streamed output line by
+Plain mode keeps the readline prompt and the same commands — `/model`, `/mode` (with the
+`/plan` / `/ask` / `/act` / `/auto` shortcuts), `/backend`, `/models`, `/verify`, `/duel`, `/sessions`,
+`/resume`, `/new`, `/rename`, `/params`, `/web`, `/airgap`, `/hierarchy`, `/mcp`, `/perf`, `/export`, `/pull`, `/image`, `/reconnect`, `/tour`, `/exit` — printing streamed output line by
 line instead of in the TUI. It also honours the `--resume` / `--session` / `--new` startup
-flags. Run a command with no args for usage (`/params preset balanced`, `/approve ask`,
-`/web on`, …); in **Ask** approval mode it prompts inline before each edit/command.
+flags. Run a command with no args for usage (`/params preset balanced`, `/mode ask`,
+`/web on`, …); in the **ask** and **act** modes it prompts inline before the agent edits a
+file or runs a command (`/approve` still works — it's an alias of `/mode`). When you quit,
+plain mode says goodbye with the session's token count and what those tokens would have
+cost on a metered cloud API.
 
 > Kiln operates in the **current working directory** — opencode reads and writes
 > files there. Run `kiln` from the project you want it to work in.
@@ -367,6 +446,7 @@ Most users set nothing here — onboarding persists your backend and model to
 | `KILN_OPENCODE_PORT` | `4096` | Port the opencode server listens on |
 | `KILN_OPENCODE_TIMEOUT` | `60000` | ms to wait for opencode to start (first run may fetch the provider) |
 | `KILN_CONTEXT_LENGTH` | `16384` | Context length requested when Kiln loads a model fresh (opencode's system prompt is ~9k tokens, so don't go much lower) |
+| `KILN_PREHEAT` | `true` | Warm-up at launch (TUI): quietly load the default model and prime the backend's prompt cache with a throwaway turn, so the first real prompt skips the cold prefill. Set `0` to load lazily on your first prompt instead. |
 | `KILN_ENABLE_REASONING` | `false` | Let opencode send reasoning/"thinking" requests. Off by default — LM Studio reports no reasoning capability, so enabling it for a model that doesn't support it can crash the turn. Set `1`/`true` only for models you know support thinking. |
 | `KILN_IDLE_TTL` | `1800` | Seconds of inactivity after which a Kiln-loaded model auto-unloads to free VRAM. The timer resets on every request, so active sessions aren't interrupted; the next prompt JIT-reloads. Set `off` (or `0`) to keep the model resident. Only affects models Kiln loads. |
 | `KILN_LEAN_TOOLS` | `true` | Trim opencode's tool set to a lean local-coding set (drops the `task`/`skill` tools and, when offline, the web tools) so the model **prefills less each turn**. The core file/shell tools (read/write/edit/bash/grep/glob) are always kept. Set `0` to send opencode's full tool set. |
@@ -399,14 +479,45 @@ Most users set nothing here — onboarding persists your backend and model to
   Windows/Linux). It's an estimate only — confirm the real fit in LM Studio. If a load
   fails, pick a smaller model or lower `KILN_CONTEXT_LENGTH`.
 
+## Developing Kiln
+
+> This section is for working **on** Kiln from a source checkout — **not needed to use it.**
+> End users install the prebuilt binary (see [Install](#install)).
+
+Kiln's **source is private**; the public-facing distribution is the compiled binary published to
+a separate **public release repo**. Developing requires **Bun ≥ 1.3** (Kiln runs its TypeScript
+directly under Bun — no Node/build step):
+
+```sh
+git clone <private repo> && cd kiln
+bun install
+bun run build         # type-check (tsc --noEmit)
+bun test
+bin/kiln              # the dev launcher: runs `bun run src/index.ts` (also: kiln dev / kiln build)
+```
+
+`bin/kiln` is the developer launcher and supports `kiln dev` (`--watch`) and `kiln build`
+(`tsc`). The **compiled binary deliberately rejects these** — it ships no toolchain or source.
+
+**Build the release binaries** (standalone, minified, no source maps; one per platform):
+
+```sh
+bun run build:binary       # just the host platform (fast)
+bun run build:binaries     # all 5 targets → dist/ + SHA256SUMS + license notices
+```
+
+Releasing (tagging, the GitHub Action, the private→public split, setting the install repo URL)
+is documented in **[RELEASING.md](RELEASING.md)** — those are the maintainer's manual steps.
 
 ## Alpha status
 
 Kiln is an **open alpha** (`v0.1.0-alpha.1`). Here's the honest state of it:
 
 **Works well today:** the full-screen TUI (cockpit, parameter rail, transcript), `--plain`
-mode, LM Studio and Ollama backends, tool-calling (read/edit/write/shell), sessions
-(resume/rename/export), model management (`/pull`, VRAM fit), the offline/airgap controls,
+mode, LM Studio and Ollama backends, tool-calling (read/edit/write/shell), the autonomy
+mode dial (plan/ask/act/auto), sessions
+(resume/rename/export), model management (`/models`, `/pull`, `/verify`, `/duel`,
+`/backend`, VRAM fit), the offline/airgap controls,
 `kiln doctor`, and the one-command installer on macOS/Linux.
 
 **Rough edges:**
@@ -446,10 +557,12 @@ web tools off regardless of any other setting, and the cockpit shows a `⊘ AIRG
   shell environment, in keeping with offline-first (no bundled search credentials).
 
 By default the agent may edit files and run commands in your working directory **without
-asking** (frictionless local coding). If you'd rather confirm each action, set
-**`/settings` → Approvals → Ask** (or **Read-only** to forbid edits/commands entirely);
-in Ask mode Kiln prompts you before every file edit and shell command. The setting applies
-on the next launch. Until you switch it on, run Kiln in directories you trust.
+asking** (frictionless local coding — the **auto** mode). If you'd rather keep a hand on
+the dial, turn down the **autonomy mode**: **act** still edits freely but asks before
+shell commands, **ask** confirms every file edit and shell command, and **plan** is
+read-only — mutating calls are auto-rejected outright. Cycle it live with `Shift+Tab` or
+`/mode`; it applies immediately, mid-session, and the cockpit's `MODE` badge always shows
+where you are. Until you turn the dial down, run Kiln in directories you trust.
 
 ## License
 

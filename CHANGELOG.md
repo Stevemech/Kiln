@@ -4,7 +4,38 @@ All notable changes to Kiln are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and Kiln aims for
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0-alpha.1] — 2026-06-08
+## [0.1.0-alpha.1] — 2026-06-08 (binaries refreshed 2026-06-11)
+
+> The alpha.1 release assets were rebuilt on 2026-06-11 with everything below — same tag,
+> substantially more Kiln.
+
+### Added (2026-06-11 refresh)
+- **The autonomy mode dial** — plan / ask / act / auto, switched LIVE mid-session with
+  `Shift+Tab` or `/mode` (+ `/plan` `/ask` `/act` `/auto`); cockpit badge; replaces the
+  per-tool approval settings (which silently never worked against opencode 1.16 — fixed).
+- **`/models`** — hardware-aware model discovery from a hand-verified catalog (exact pull
+  tags, task tags, honest cautions; broken-for-agents families excluded with reasons).
+- **`/verify`** — the tool-call preflight: proves a model emits STRUCTURED tool calls on
+  your own GPU; verdicts persist and badge the pickers ("✓ tools verified" / "⚠ tools fail live").
+- **`/duel`** — one prompt, two local models, side-by-side answers with honest numbers.
+- **`/backend`** — live backend switching (also `b` from `/model` and `/settings`); the
+  conversation reattaches.
+- **Preheat** — Kiln warms the model's prompt cache at launch so the first real prompt
+  skips the cold prefill (`KILN_PREHEAT=0` to disable).
+- **Cloud-savings odometer** — the session total shows ≈$ of metered-API spend avoided.
+- **Tiered onboarding** — an experience question; beginners get a warm, hardware-aware
+  guide (what your machine can run, honest expectations, per-OS install steps).
+- **In-Kiln LM Studio downloads** — `/pull` now works on LM Studio too (catalog search,
+  recommended quant, byte progress). Models pulled mid-session auto-register on `/model`.
+- **Slash-command mini-picker** — `↑/↓` pick a suggestion, Enter runs the highlight.
+
+### Fixed (2026-06-11 refresh)
+- Honest telemetry: cockpit rates/meters now accumulate across a turn's steps (no more
+  cache-replay "26k tok/s prefill" fictions or mid-turn meter dips).
+- Honest VRAM math: fit badges credit the models a load will displace; capacity-based
+  guidance in onboarding.
+- The slash-hint lag / right-edge flicker / frame-overflow paint corruption on short
+  terminals; overlay row-merging; a shutdown that could leave a zombie process.
 
 First public alpha. Kiln is a local-first terminal coding agent: it drives opencode against a
 model on **your** machine (LM Studio, Ollama, or any OpenAI-compatible endpoint), with a live
