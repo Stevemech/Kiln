@@ -50,7 +50,7 @@ Say "Platform: Windows ($env:PROCESSOR_ARCHITECTURE) -> $Asset"
 
 # --- resolve download base -------------------------------------------------------------------
 if (-not $DownloadBase) {
-  if ($Repo -eq "Stevemech/Kiln") { Die "Set the release repo: `$env:KILN_REPO='owner/repo' (or edit `$Repo at the top)." }
+  if ($Repo -eq "OWNER/kiln") { Die "Set the release repo: `$env:KILN_REPO='owner/repo' (or edit `$Repo at the top)." }
   if ($Version -eq "latest") {
     # Newest published tag INCLUDING prereleases (the API list — unlike /releases/latest, which
     # skips prereleases, and our alpha/beta tags ARE prereleases).

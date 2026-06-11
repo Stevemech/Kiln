@@ -80,7 +80,7 @@ resolve_latest_tag() {
     | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/'
 }
 if [ -z "$DOWNLOAD_BASE" ]; then
-  [ "$REPO" = "Stevemech/Kiln" ] && die "Set the release repo: KILN_REPO=owner/repo bash install.sh (or edit REPO at the top)."
+  [ "$REPO" = "OWNER/kiln" ] && die "Set the release repo: KILN_REPO=owner/repo bash install.sh (or edit REPO at the top)."
   if [ "$VERSION" = "latest" ]; then
     TAG="$(resolve_latest_tag || true)"
     [ -n "$TAG" ] || die "Couldn't resolve the latest release from ${REPO}. Pin one: KILN_VERSION=vX.Y.Z bash install.sh"
